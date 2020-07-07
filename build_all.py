@@ -22,18 +22,14 @@ import shutil
 import subprocess
 import sys
 
-sys.path.append(
-    os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pylib')
-)
-
-from embench_core import check_python_version
-from embench_core import log
-from embench_core import gp
-from embench_core import setup_logging
-from embench_core import log_args
-from embench_core import find_benchmarks
-from embench_core import log_benchmarks
-from embench_core import arglist_to_str
+from .pylib.embench_core import check_python_version
+from .pylib.embench_core import log
+from .pylib.embench_core import gp
+from .pylib.embench_core import setup_logging
+from .pylib.embench_core import log_args
+from .pylib.embench_core import find_benchmarks
+from .pylib.embench_core import log_benchmarks
+from .pylib.embench_core import arglist_to_str
 
 
 def build_parser():
@@ -120,6 +116,13 @@ def build_parser():
         type=int,
         default=5,
         help='Timeout used for the compiler and linker invocations'
+    )
+
+    parser.add_argument(
+        "--binary-converter",
+        help="Command used to convert built test (elf file) into a binary. Usually 'objcopy'. If set, testing script will use generated binaries.",
+        type=str,
+        default=None
     )
 
     return parser
@@ -238,7 +241,7 @@ def populate_defaults():
 
     conf['cc'] = 'cc'
     # ld is not set, to allow it to default to 'cc'
-    conf['cflags'] = {}
+    conf['cflags'] = {'-c'}
     conf['ldflags'] = {}
     conf['cc_define1_pattern'] = '-D{0}'
     conf['cc_define2_pattern'] = '-D{0}={1}'
@@ -263,6 +266,9 @@ def populate_user_commands(conf, args):
         conf['cc'] = args.cc
     if args.ld:
         conf['ld'] = args.ld
+
+    conf['binary-converter'] = args.binary_converter
+    conf['binary'] = args.binary_converter is not None
 
     return conf
 
@@ -365,6 +371,11 @@ def validate_tools():
         log.error(f'ERROR: Linker {gp["ld"]} not found on path: exiting')
         sys.exit(1)
 
+    # Validate binary_converter
+    if gp['binary'] and not shutil.which(gp['binary-converter']):
+        log.error(f'ERROR: binary converter {gp["binary-converter"]} not found: exiting')
+        sys.exit(1)
+
 
 def set_parameters(args):
     """Determine all remaining parameters"""
@@ -386,7 +397,8 @@ def set_parameters(args):
                 try:
                     exec(fileh.read(), globals(), config[conf])
                 except PermissionError:
-                    log.error('ERROR: Corrupt config file {conf_file}: exiting')
+                    log.error('ERROR: Corrupt \
+config file {conf_file}: exiting')
                     sys.exit(1)
 
     # Populate user values from the command line
@@ -454,14 +466,12 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
     # binary.
     succeeded = True
     res = None
-
     if not os.path.isfile(abs_bin) or (
             os.path.getmtime(abs_src) > os.path.getmtime(abs_bin)
     ):
         if gp['verbose']:
             log.debug(f'Compiling in directory {bindir}')
             log.debug(arglist_to_str(arglist))
-
         try:
             res = subprocess.run(
                 arglist,
@@ -469,23 +479,17 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
                 stderr=subprocess.PIPE,
                 cwd=bindir,
                 timeout=gp['timeout'],
+                check=True
             )
-            if res.returncode != 0:
-                log.warning(
-                    f'Warning: Compilation of {f_root}{suffix} from source ' +
-                    f'directory {srcdir} to binary directory {bindir} failed'
-                )
-                succeeded = False
-        except subprocess.TimeoutExpired:
+        except subprocess.CalledProcessError as error:
             log.warning(
                 f'Warning: Compilation of {f_root}{suffix} from source ' +
-                f'directory {srcdir} to binary directory {bindir} timed out'
+                f'directory {srcdir} to binary directory {bindir} failed ' +
+                f'with return code {error.returncode}'
             )
+            log.debug('Command was:')
+            log.debug(arglist_to_str(arglist))
             succeeded = False
-
-    if not succeeded:
-        log.debug('Command was:')
-        log.debug(arglist_to_str(arglist))
 
     log.debug(res.stdout.decode('utf-8'))
     log.debug(res.stderr.decode('utf-8'))
@@ -559,7 +563,7 @@ def compile_support():
             root, ext = os.path.splitext(filename)
             full_fn = os.path.join(dirname, filename)
             if (os.path.isfile(full_fn) and
-                (ext == '.c' or ext == '.s' or ext == '.S')):
+               (ext == '.c' or ext == '.s' or ext == '.S')):
                 # Create build directory
                 builddir = gp['bd_' + dirtype + 'dir']
                 if not os.path.isdir(builddir):
@@ -595,7 +599,6 @@ def create_link_binlist(abs_bd):
     for binf in sorted(os.listdir(abs_bd), key=lambda objf: objf):
         if binf.endswith('.o'):
             binlist.extend(gp['ld_input_pattern'].format(binf).split())
-
 
     # Add arch, chip and board binaries
     for dirtype in ['arch', 'chip', 'board']:
@@ -679,18 +682,15 @@ def link_benchmark(bench):
             stderr=subprocess.PIPE,
             cwd=abs_bd_b,
             timeout=gp['timeout'],
+            check=True
         )
-        if res.returncode != 0:
-            log.warning(f'Warning: Link of benchmark "{bench}" failed')
-            succeeded = False
-    except subprocess.TimeoutExpired:
-        log.warning(f'Warning: link of benchmark "{bench}" timed out')
-        succeeded = False
-
-    if not succeeded:
+    except subprocess.CalledProcessError as error:
+        log.warning(f'Warning: Link of benchmark "{bench}" failed with' +
+                    f' with return code {error.returncode}')
         log.debug('In directory "' + abs_bd_b + '"')
         log.debug('Command was:')
         log.debug(arglist_to_str(arglist))
+        succeeded = False
 
     log.debug(res.stdout.decode('utf-8'))
     log.debug(res.stderr.decode('utf-8'))
@@ -698,15 +698,35 @@ def link_benchmark(bench):
     return succeeded
 
 
-def main():
-    """Main program to drive building of benchmarks."""
-    # Establish the root directory of the repository, since we know this file is
-    # in that directory.
-    gp['rootdir'] = os.path.abspath(os.path.dirname(__file__))
+def binary_benchmark_output(bench):
+    abs_bd_b = os.path.join(gp['bd_benchdir'], bench)
+    arglist = [gp['binary-converter'], '-O', 'binary', bench, bench+'.bin']
 
-    # Parse arguments using standard technology
-    parser = build_parser()
-    args = parser.parse_args()
+    try:
+        res = subprocess.run(
+            arglist,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=abs_bd_b,
+            timeout=gp['timeout'],
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        log.warning(f'Warning: Objcopy of benchmark "{bench}" failed with ' +
+                    f'return code {error.returncode}')
+        log.debug('In directory "' + abs_bd_b + '"')
+        log.debug('Command was: {}'.format(arglist_to_str(arglist)))
+        log.debug(res.stdout.decode('utf-8'))
+        log.debug(res.stderr.decode('utf-8'))
+        return False
+
+    return True
+
+
+def submodule_main(args):
+    # Establish the root directory of the repository, since we know
+    # this file is in that directory.
+    gp['rootdir'] = os.path.abspath(os.path.dirname(__file__))
 
     # Establish logging, using "build" as the log file prefix.
     gp['verbose'] = args.verbose
@@ -736,21 +756,34 @@ def main():
     # Track success
     successful = compile_support()
     if successful:
-        log.debug(f'Compilation of support files successful')
+        log.debug('Compilation of support files was successful')
 
     for bench in benchmarks:
         res = compile_benchmark(bench)
         successful &= res
         if res:
-            log.debug(f'Compilation of benchmark "{bench}" successful')
+            log.debug(f'Compilation of benchmark "{bench}" was successful')
             res = link_benchmark(bench)
             successful &= res
             if res:
-                log.debug(f'Linking of benchmark "{bench}" successful')
+                log.debug(f'Linking of benchmark "{bench}" was successful')
                 log.info(f'{bench}')
+                if gp['binary']:
+                    res = binary_benchmark_output(bench)
+                    log.debug(f'Objcopy of benchmark "{bench}" was successful')
+                    successful &= res
 
     if successful:
         log.info('All benchmarks built successfully')
+    log.handlers = []
+
+
+def main():
+    """Main program to drive building of benchmarks."""
+    # Parse arguments using standard technology
+    parser = build_parser()
+    args = parser.parse_args()
+    submodule_main(args)
 
 
 # Make sure we have new enough Python and only run if this is the main package

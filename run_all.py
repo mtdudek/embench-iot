@@ -36,6 +36,53 @@ from embench_core import log_benchmarks
 
 # The various sets of benchmarks we could run
 
+ri5cy_runset = {
+    'name' : 'RI5CY bench',
+    'speed bench' : {
+        'timeout' : 1800,
+        'arglist' :[
+            './benchmark_speed.py',
+            '--target-module=run_gdbserver_sim',
+            '--gdbserver-command=riscv32-gdbserver',
+            '--gdbserver-target="-c ri5cy"',
+            '--gdb-command=riscv64-unknown-elf-gdb',
+            '--json-output',
+            '--no-jason-comma'
+        ],
+        'desc' : 'run'
+    },
+    'runs' : [
+        {   'name' : 'RI5CY O2',
+            'arch' : 'riscv32',
+            'chip' : 'generic',
+            'board' : 'ri5cyverilator',
+            'cc' : 'riscv64-unknown-elf-gcc',
+            'cflags' : '-march=rv32im -mabi=ilp32 -O2',
+            'ldflags' : '-march=rv32im -mabi=ilp32',
+            'user-libs' : '-lm'
+        },
+        {   'name' : ' RI5CY Os',
+            'arch' : 'riscv32',
+            'chip' : 'generic',
+            'board' : 'ri5cyverilator',
+            'cc' : 'riscv64-unknown-elf-gcc',
+            'cflags' : '-march=rv32im -mabi=ilp32 -Os',
+            'ldflags' : '-march=rv32im -mabi=ilp32',
+             'user-libs' : '-lm'       
+        },
+        {   'name' : 'VRI5C Os -msave-restore',
+            'arch' : 'riscv32',
+            'chip' : 'generic',
+            'board' : 'ri5cyverilator',
+            'cc' : 'riscv64-unknown-elf-gcc',
+            'cflags' : '-march=rv32im -mabi=ilp32 -Os -msave-restore',
+            'ldflags' : '-march=rv32im -mabi=ilp32',
+             'user-libs' : '-lm'       
+        }       
+    ]
+}
+
+
 fosdem_rv32_gcc_opt_runset = {
     'name' : 'FOSDEM RV32IMC optimization comparison',
     'size benchmark' : {
@@ -1187,6 +1234,12 @@ def build_parser():
         action='store_true',
         help='Run Arm GCC version comparison benchmarks'
     )
+    parser.add_argument(
+        '--ri5cy',
+        action='store_true',
+        help='Run ri5cy benchmarks'
+    )
+
 
     return parser
 
@@ -1333,7 +1386,8 @@ def main():
         runsets.append(gcc9_arch_runset)
     if args.arm_gcc_version:
         runsets.append(arm_gcc_version_runset)
-
+    if args.ri5cy:
+        runsets.append(ri5cy_runset)
     if not runsets:
         print("ERROR: No run sets specified")
         sys.exit(1)

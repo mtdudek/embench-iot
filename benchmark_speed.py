@@ -26,19 +26,15 @@ import sys
 
 from json import loads
 
-sys.path.append(
-    os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pylib')
-)
-
-from embench_core import check_python_version
-from embench_core import log
-from embench_core import gp
-from embench_core import setup_logging
-from embench_core import log_args
-from embench_core import find_benchmarks
-from embench_core import log_benchmarks
-from embench_core import embench_stats
-from embench_core import output_format
+from .pylib.embench_core import check_python_version
+from .pylib.embench_core import log
+from .pylib.embench_core import gp
+from .pylib.embench_core import setup_logging
+from .pylib.embench_core import log_args
+from .pylib.embench_core import find_benchmarks
+from .pylib.embench_core import log_benchmarks
+from .pylib.embench_core import embench_stats
+from .pylib.embench_core import output_format
 
 
 def get_common_args():
@@ -118,6 +114,13 @@ def get_common_args():
         default=30,
         help='Timeout used for running each benchmark program'
     )
+    parser.add_argument(
+        '--change-dir',
+        default=True,
+        help='If set to True, when running Y test,\
+benching subprocess will be started inside\
+directory containg said test'
+    )
 
     return parser.parse_known_args()
 
@@ -152,8 +155,11 @@ def validate_args(args):
         gp['output_format'] = output_format.TEXT
 
     gp['timeout'] = args.timeout
+    gp['change_dir'] = args.change_dir
 
     try:
+        sys.path.append(
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pylib'))
         newmodule = importlib.import_module(args.target_module)
     except ImportError as error:
         log.error(
@@ -174,14 +180,15 @@ def benchmark_speed(bench, target_args):
     appdir = os.path.join(gp['bd_benchdir'], bench)
     appexe = os.path.join(appdir, bench)
 
+    arglist = None
     if os.path.isfile(appexe):
-        arglist = build_benchmark_cmd(bench, target_args)
+        arglist = build_benchmark_cmd(bench, target_args)  # noqa: F821
         try:
             res = subprocess.run(
                 arglist,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=appdir,
+                cwd=appdir if gp['change_dir'] else None,
                 timeout=gp['timeout'],
             )
             if res.returncode != 0:
@@ -196,7 +203,7 @@ def benchmark_speed(bench, target_args):
 
     # Process results
     if succeeded:
-        exec_time = decode_results(
+        exec_time = decode_results(  # noqa: F821
             res.stdout.decode('utf-8'), res.stderr.decode('utf-8')
         )
         succeeded = exec_time > 0
@@ -236,7 +243,7 @@ def collect_data(benchmarks, remnant):
         baseline = loads(fileh.read())
 
     # Parse target specific args
-    target_args = get_target_args(remnant)
+    target_args = get_target_args(remnant)  # noqa: F821
 
     # Collect data
     successful = True
@@ -268,7 +275,7 @@ def collect_data(benchmarks, remnant):
                     output = f'{rel_data[bench]:.2f}'
 
                 if bench == benchmarks[0]:
-                    log.info(f'    {{ ' + f'"{bench}" : {output},')
+                    log.info('    { ' + f'"{bench}" : {output},')
                 elif bench == benchmarks[-1]:
                     log.info(f'      "{bench}" : {output}')
                 else:
@@ -302,15 +309,10 @@ def collect_data(benchmarks, remnant):
     return [], []
 
 
-def main():
-    """Main program driving measurement of benchmark size"""
-    # Establish the root directory of the repository, since we know this file is
-    # in that directory.
+def submodule_main(args, remnant):
+    # Establish the root directory of the repository, since we know
+    # this file is in that directory.
     gp['rootdir'] = os.path.abspath(os.path.dirname(__file__))
-
-    # Parse arguments common to all speed testers, and get list of those
-    # remaining.
-    args, remnant = get_common_args()
 
     # Establish logging
     setup_logging(args.logdir, 'speed')
@@ -336,9 +338,18 @@ def main():
             opt_comma = ',' if args.json_comma else ''
             embench_stats(benchmarks, raw_data, rel_data, 'speed', opt_comma)
             log.info('All benchmarks run successfully')
+        log.handlers = []
     else:
         log.info('ERROR: Failed to compute speed benchmarks')
         sys.exit(1)
+
+
+def main():
+    """Main program driving measurement of benchmark size"""
+    # Parse arguments common to all speed testers, and get list of those
+    # remaining.
+    args, remnant = get_common_args()
+    submodule_main(args, remnant)
 
 
 # Make sure we have new enough Python and only run if this is the main package

@@ -65,7 +65,7 @@ def build_benchmark_cmd(bench, args):
         'set height 0',
         'file {0}',
         f'target remote | {args.gdbserver_command} '
-        + f'-c {args.gdbserver_target} --stdin',
+        + f' {args.gdbserver_target} --stdin',
         'stepi',
         'stepi',
         'load',
@@ -94,14 +94,16 @@ def decode_results(stdout_str, stderr_str):
     # Return code is in standard output. We look for the string that means we
     # hit a breakpoint on _exit, then for the string returning the value.
     rcstr = re.search(
-        'Breakpoint 3,.*\$1 = (\d+)', stdout_str, re.S
+        'Breakpoint 3,.*\\$1 = (\\d+)', stdout_str, re.S
     )
+    log.debug(stdout_str)
+    log.debug(stderr_str)
     if not rcstr:
         log.debug('Warning: Failed to find return code')
         return 0.0
 
     # The start and end cycle counts are in the stderr string
-    times = re.search('(\d+)\D+(\d+)', stderr_str, re.S)
+    times = re.search('(\\d+)\\D+(\\d+)', stderr_str, re.S)
     if times:
         ms_elapsed = float(int(times.group(2)) - int(times.group(1))) / 1000.0
         return ms_elapsed
