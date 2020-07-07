@@ -82,3 +82,11 @@ files for details.
 
 The code base is OpenChain compliant, with SPDX license identifiers provided
 throughout.
+
+
+## To run ri5cy testbench
+Build tests with :
+./build_all.py --arch riscv32 --chip generic --board ri5cyverilator  --cflags="-march=rv32im -mabi=ilp32" --cc=riscv64-unknown-elf-gcc --ldflags="-march=rv32im -mabi=ilp32" --user-libs=-lm --clean 
+
+Run with (requiers riscv32-gdbserver with ri5cy core):
+./benchmark_speed.py --timeout 1800 --target-module=run_gdbserver_sim --gdbserver-command=riscv32-gdbserver --gdbserver-target="-c ri5cy" --gdb-command=riscv64-unknown-elf-gdb

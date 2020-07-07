@@ -1,3 +1,18 @@
+2020-07-23 Maciej Dudek
+
+	* Added -c flag to cflags in build_all.py
+	* Added --binary-converter option to the build_all.py script.
+	If set, test elf file will be converted to binary using provided tool
+	(usually objcopy)
+	* Added --change-dir switch to the benchmark_speed.py script, when set
+	submodule run will use the provide work directory,
+	* build_all.py: moved core parts of main function to the submodule_main,
+	so it can be used in python scripts directly;
+	* benchmark_speed.py: likewise
+	* both build_all and benchmark_speed now clears logger handlers on exit
+	* Removed -c flag from run_gdbserver_sim.py
+
+
 2020-02-17  Paolo Savini
 
 	Add support for the board stm32f4-discovery.
