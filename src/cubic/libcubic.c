@@ -26,11 +26,11 @@
 void
 SolveCubic (double a, double b, double c, double d, int *solutions, double *x)
 {
-  double a1 = (double) (b / a);
-  double a2 = (double) (c / a);
-  double a3 = (double) (d / a);
-  double Q = (a1 * a1 - 3.0 * a2) / 9.0;
-  double R = (2.0 * a1 * a1 * a1 - 9.0 * a1 * a2 + 27.0 * a3) / 54.0;
+  long double a1 = (long double) (b / a);
+  long double a2 = (long double) (c / a);
+  long double a3 = (long double) (d / a);
+  long double Q = (a1 * a1 - 3.0L * a2) / 9.0L;
+  long double R = (2.0L * a1 * a1 * a1 - 9.0L * a1 * a2 + 27.0L * a3) / 54.0L;
   double R2_Q3 = (double) (R * R - Q * Q * Q);
 
   double theta;
@@ -50,8 +50,8 @@ SolveCubic (double a, double b, double c, double d, int *solutions, double *x)
       *solutions = 1;
       x[0] = pow (sqrt (R2_Q3) + fabs ((double) R), 1 / 3.0);
       x[0] += ((double) Q) / x[0];
-      x[0] *= (R < 0.0) ? 1 : -1;
-      x[0] -= (double) (a1 / 3.0);
+      x[0] *= (R < 0.0L) ? 1 : -1;
+      x[0] -= (double) (a1 / 3.0L);
     }
 }
 
