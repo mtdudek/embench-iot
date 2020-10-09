@@ -165,7 +165,7 @@ def compute_geomean(benchmarks, raw_data, rel_data):
     count = 0.0
 
     for bench in benchmarks:
-        if gp['absolute']:
+        if gp['absolute'] & 1 == 0:
             # Want absolute results. Ignore zero values
             if bench in raw_data:
                 if raw_data[bench] > 0:
@@ -194,7 +194,7 @@ def compute_geosd(benchmarks, raw_data, rel_data, geomean, count):
     geosd = 0.0
 
     for bench in benchmarks:
-        if gp['absolute']:
+        if gp['absolute'] & 1 == 0:
             # Want absolute results
             if raw_data[bench] > 0.0:
                 lnsize += math.pow(math.log(raw_data[bench] / geomean), 2)
@@ -237,7 +237,7 @@ def output_stats(geomean, geosd, georange, count, bm_type, opt_comma):
     georange_op = ''
 
     if count > 0:
-        if gp['absolute']:
+        if gp['absolute'] & 1 == 0:
             if gp['output_format'] == output_format.JSON:
                 geomean_op = f'{round(geomean)}'
                 geosd_op = f'{(geosd):.2f}'
