@@ -482,13 +482,11 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
                 timeout=gp['timeout'],
                 check=True
             )
-            if res.returncode != 0:
-                log.warning(
-                    'Warning: Compilation of {root}{suff} from source directory {src} to binary directory {bin} failed'
-                        .format(root=f_root, suff=suffix, src=srcdir, bin=bindir)
-                )
-                succeeded = False
-        except subprocess.TimeoutExpired:
+
+            log.debug(res.stdout.decode('utf-8'))
+            log.debug(res.stderr.decode('utf-8'))
+
+        except subprocess.TimeoutExpired as error:
             log.warning(
                 'Warning: Compilation of {root}{suff} from source directory {src} to binary directory {bin} timed out'
                     .format(root=f_root, suff=suffix, src=srcdir, bin=bindir)
@@ -496,6 +494,10 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
             log.debug('Command was:')
             log.debug(arglist_to_str(arglist))
             succeeded = False
+
+            log.debug(error.stdout.decode('utf-8'))
+            log.debug(error.stderr.decode('utf-8'))
+
         except subprocess.CalledProcessError as error:
             log.warning(
                 f'Warning: Compilation of {f_root}{suffix} from source ' +
@@ -506,12 +508,12 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
             log.debug(arglist_to_str(arglist))
             succeeded = False
 
+            log.debug(error.stdout.decode('utf-8'))
+            log.debug(error.stderr.decode('utf-8'))
+
         if not succeeded:
             log.debug('Command was:')
             log.debug(arglist_to_str(arglist))
-
-            log.debug(res.stdout.decode('utf-8'))
-            log.debug(res.stderr.decode('utf-8'))
 
     return succeeded
 
@@ -699,26 +701,27 @@ def link_benchmark(bench):
             timeout=gp['timeout'],
             check=True
         )
-        if res.returncode != 0:
-            log.warning('Warning: Link of benchmark "{bench}" failed'.format(bench=bench))
-            succeeded = False
-
         log.debug(res.stdout.decode('utf-8'))
         log.debug(res.stderr.decode('utf-8'))
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as error:
         log.warning('Warning: link of benchmark "{bench}" timed out'.format(bench=bench))
         succeeded = False
 
+        log.debug(error.stdout.decode('utf-8'))
+        log.debug(error.stderr.decode('utf-8'))
+
     except subprocess.CalledProcessError as error:
         log.warning(
-            f'Warning: Compilation of {f_root}{suffix} from source ' +
-            f'directory {srcdir} to binary directory {bindir} failed ' +
+            f'Warning: linking of {bench} failed ' +
             f'with return code {error.returncode}'
         )
         log.debug('Command was:')
         log.debug(arglist_to_str(arglist))
         succeeded = False
+
+        log.debug(error.stdout.decode('utf-8'))
+        log.debug(error.stderr.decode('utf-8'))
 
     if not succeeded:
         log.debug('In directory "' + abs_bd_b + '"')

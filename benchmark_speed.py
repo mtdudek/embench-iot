@@ -63,14 +63,23 @@ def get_common_args():
     )
     parser.add_argument(
         '--absolute',
-        action='store_true',
+        action='store_const',
+        const=0,
         help='Specify to show absolute results',
     )
     parser.add_argument(
         '--relative',
         dest='absolute',
-        action='store_false',
+        action='store_const',
+        const=1,
         help='Specify to show relative results (the default)',
+    )
+    parser.add_argument(
+        '--both',
+        dest='absolute',
+        action='store_const',
+        const=2,
+        help='Specify to show both results',
     )
     parser.add_argument(
         '--json-output',
@@ -174,7 +183,7 @@ def validate_args(args):
 
     try:
         sys.path.append(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pylib'))
+            os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pylib'))
         newmodule = importlib.import_module(args.target_module)
     except ImportError as error:
         log.error(
@@ -247,7 +256,7 @@ def run_threads(bench, target_args, data_collect_q):
     item = benchmark_speed(bench, target_args)
     data_collect_q.put_nowait([bench, item])
     
-def collect_data(benchmarks, remnant):
+def collect_data(args, benchmarks, remnant):
     """Collect and log all the raw and optionally relative data associated with
        the list of benchmarks supplied in the "benchmarks" argument. "remant"
        is left over args from the command line, which may be useful to the
@@ -298,29 +307,36 @@ def collect_data(benchmarks, remnant):
             del rel_data[bench]
             successful = False
         else:
-            if (not gp['absolute'] and
+            if (gp['absolute'] > 0 and
                     gp['output_format'] != output_format.BASELINE):
                 rel_data[bench] = baseline[bench] / raw_data[bench]
 
     # Output it
     if gp['output_format'] == output_format.JSON:
-        log.info('  "speed results" :')
-        log.info('  { "detailed speed results" :')
-        for bench in benchmarks:
-            output = ''
-            if raw_data[bench] != 0.0:
-                if gp['absolute']:
-                    output = f'{round(raw_data[bench])}'
-                else:
-                    output = f'{rel_data[bench]:.2f}'
+        while True:
+            log.info('  "speed results" :')
+            log.info('  { "detailed speed results" :')
+            for bench in benchmarks:
+                output = ''
+                if raw_data[bench] != 0.0:
+                    if gp['absolute'] & 1 == 0:
+                        output = f'{round(raw_data[bench])}'
+                    else:
+                        output = f'{rel_data[bench]:.2f}'
 
-                if bench == benchmarks[0]:
-                    log.info('    { ' + f'"{bench}" : {output},')
-                elif bench == benchmarks[-1]:
-                    log.info(f'      "{bench}" : {output}')
-                else:
-                    log.info(f'      "{bench}" : {output},')
-        log.info('    },')
+                    if bench == benchmarks[0]:
+                        log.info('    { ' + f'"{bench}" : {output},')
+                    elif bench == benchmarks[-1]:
+                        log.info(f'      "{bench}" : {output}')
+                    else:
+                        log.info(f'      "{bench}" : {output},')
+            log.info('    },')
+            opt_comma = ',' if args.json_comma else ''
+            embench_stats(benchmarks, raw_data, rel_data, 'speed', opt_comma)
+            gp['absolute'] >>= 1
+            if gp['absolute'] == 0:
+                break
+
     elif gp['output_format'] == output_format.TEXT:
         log.info('Benchmark           Speed')
         log.info('---------           -----')
@@ -333,6 +349,8 @@ def collect_data(benchmarks, remnant):
                     output = f'  {rel_data[bench]:6.2f}'
             # Want relative results (the default). Only use non-zero values.
             log.info(f'{bench:15}  {output:8}')
+        opt_comma = ',' if args.json_comma else ''
+        embench_stats(benchmarks, raw_data, rel_data, 'speed', opt_comma)
     elif gp['output_format'] == output_format.BASELINE:
         log.info('{')
         for bench in benchmarks:
@@ -366,7 +384,7 @@ def submodule_main(args, remnant):
     log_benchmarks(benchmarks)
 
     # Collect the speed data for the benchmarks. Pass any remaining args.
-    raw_data, rel_data = collect_data(benchmarks, remnant)
+    raw_data, rel_data = collect_data(args, benchmarks, remnant)
 
     # We can't compute geometric SD on the fly, so we need to collect all the
     # data and then process it in two passes. We could do the first processing
@@ -374,10 +392,7 @@ def submodule_main(args, remnant):
     # separately. Given the size of datasets with which we are concerned the
     # compute overhead is not significant.
     if raw_data:
-        if gp['output_format'] != output_format.BASELINE:
-            opt_comma = ',' if args.json_comma else ''
-            embench_stats(benchmarks, raw_data, rel_data, 'speed', opt_comma)
-            log.info('All benchmarks run successfully')
+        log.info('All benchmarks run successfully')
         log.handlers = []
     else:
         log.info('ERROR: Failed to compute speed benchmarks')
