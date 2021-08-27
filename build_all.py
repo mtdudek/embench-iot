@@ -377,6 +377,11 @@ def validate_tools():
         log.error(f'ERROR: binary converter {gp["binary-converter"]} not found: exiting')
         sys.exit(1)
 
+    # Validate binary_converter
+    if gp['binary'] and not shutil.which(gp['binary-converter']):
+        log.error(f'ERROR: binary converter {gp["binary-converter"]} not found: exiting')
+        sys.exit(1)
+
 
 def set_parameters(args):
     """Determine all remaining parameters"""
@@ -514,6 +519,7 @@ def compile_file(f_root, srcdir, bindir, suffix='.c'):
         if not succeeded:
             log.debug('Command was:')
             log.debug(arglist_to_str(arglist))
+
 
     return succeeded
 
@@ -700,7 +706,7 @@ def link_benchmark(bench):
             cwd=abs_bd_b,
             timeout=gp['timeout'],
             check=True
-        )
+        
         log.debug(res.stdout.decode('utf-8'))
         log.debug(res.stderr.decode('utf-8'))
 
