@@ -20,7 +20,7 @@
 #define N_SEARCHES 5
 
 /* BEEBS heap is just an array */
-#define HEAP_SIZE 8995
+#define HEAP_SIZE 16384
 static char heap[HEAP_SIZE];
 
 void

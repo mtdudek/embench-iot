@@ -706,7 +706,7 @@ def link_benchmark(bench):
             cwd=abs_bd_b,
             timeout=gp['timeout'],
             check=True
-        
+        )
         log.debug(res.stdout.decode('utf-8'))
         log.debug(res.stderr.decode('utf-8'))
 
